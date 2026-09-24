@@ -1,0 +1,18 @@
+groups:
+  - name: vigil
+    rules:
+      - alert: BackupNotProvenRestorable
+        expr: time() - vigil_restore_last_success_epoch_seconds > 86400
+        for: 5m
+        annotations: { summary: "{{ $labels.target }}: no successful restore drill in 24h" }
+      - alert: LastRestoreDrillFailed
+        expr: vigil_restore_last_status == 0
+        for: 1m
+      - alert: ReplicaHeartbeatLagHigh
+        expr: vigil_db_replication_lag_heartbeat_ms > 5000
+        for: 2m
+      - alert: DatabaseDown
+        expr: vigil_db_up == 0
+        for: 1m
+      - alert: AccessDriftHigh
+        expr: vigil_access_drift_findings{severity="HIGH"} > 0
