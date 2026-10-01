@@ -1,0 +1,6 @@
+target/
+data/
+*.jfr
+.DS_Store
+.idea/
+*.iml

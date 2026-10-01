@@ -1,0 +1,107 @@
+name: vigil
+
+services:
+  mysql-primary:
+    image: mysql:8.4
+    container_name: vigil-mysql-primary
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpw
+    volumes:
+      - ./docker/mysql/primary.cnf:/etc/mysql/conf.d/primary.cnf:ro
+      - ./docker/mysql/init-primary.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    ports: ["7306:3306"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prootpw"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  mysql-replica:
+    image: mysql:8.4
+    container_name: vigil-mysql-replica
+    environment:
+      MYSQL_ROOT_PASSWORD: rootpw
+    volumes:
+      - ./docker/mysql/replica.cnf:/etc/mysql/conf.d/replica.cnf:ro
+    ports: ["7307:3306"]
+    healthcheck:
+      test: ["CMD", "mysqladmin", "ping", "-h", "127.0.0.1", "-uroot", "-prootpw"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  replica-init:            # one-shot: wires replication using GTID auto-positioning
+    image: mysql:8.4
+    container_name: vigil-replica-init
+    restart: "no"
+    depends_on:
+      mysql-primary: { condition: service_healthy }
+      mysql-replica: { condition: service_healthy }
+    entrypoint: ["sh", "-c"]
+    command:
+      - >
+        mysql -hmysql-replica -uroot -prootpw -e "
+        STOP REPLICA;
+        CHANGE REPLICATION SOURCE TO SOURCE_HOST='mysql-primary', SOURCE_USER='repl',
+          SOURCE_PASSWORD='replpw', SOURCE_AUTO_POSITION=1, GET_SOURCE_PUBLIC_KEY=1;
+        START REPLICA;"
+
+  postgres:
+    image: postgres:16
+    container_name: vigil-postgres
+    environment:
+      POSTGRES_USER: vigil_admin
+      POSTGRES_PASSWORD: pgpw
+      POSTGRES_DB: vigil_demo
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements",
+              "-c", "pg_stat_statements.track=all", "-c", "track_io_timing=on"]
+    volumes:
+      - ./docker/postgres/init.sql:/docker-entrypoint-initdb.d/10-init.sql:ro
+    ports: ["7432:5432"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U vigil_admin -d vigil_demo"]
+      interval: 5s
+      timeout: 3s
+      retries: 30
+
+  mongo:
+    image: mongo:7
+    container_name: vigil-mongo
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: root
+      MONGO_INITDB_ROOT_PASSWORD: rootpw
+    volumes:
+      - ./docker/mongo/init.js:/docker-entrypoint-initdb.d/init.js:ro
+    ports: ["7017:27017"]
+
+  oracle:                  # slow to start (1-2 min). Vigil must tolerate it being down.
+    image: gvenzl/oracle-free:23-slim
+    container_name: vigil-oracle
+    environment:
+      ORACLE_PASSWORD: oraclepw
+    ports: ["7521:1521"]
+    healthcheck:
+      test: ["CMD", "healthcheck.sh"]
+      interval: 10s
+      timeout: 5s
+      retries: 30
+
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: vigil-prometheus
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+    extra_hosts: ["host.docker.internal:host-gateway"]   # Vigil runs on the host
+    ports: ["7090:9090"]
+
+  grafana:
+    image: grafana/grafana:latest
+    container_name: vigil-grafana
+    environment:
+      GF_AUTH_ANONYMOUS_ENABLED: "true"
+      GF_AUTH_ANONYMOUS_ORG_ROLE: Admin
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+    ports: ["7001:3000"]
+    depends_on: [prometheus]

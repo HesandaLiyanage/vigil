@@ -1,0 +1,62 @@
+targets:
+  mysql-primary:
+    ignorePrincipals:
+      - root@localhost
+      - root@%
+      - mysql.sys@localhost
+      - mysql.session@localhost
+      - mysql.infoschema@localhost
+    principals:
+      "app_rw@%":
+        - scope: "vigil_demo.*"
+          privileges: [SELECT, INSERT, UPDATE, DELETE]
+      "vigil_monitor@%":
+        - scope: "*.*"
+          privileges: [PROCESS, REPLICATION CLIENT, SELECT]
+        - scope: "vigil_meta.*"
+          privileges: [INSERT, UPDATE]
+      "repl@%":
+        - scope: "*.*"
+          privileges: [REPLICATION SLAVE]
+  mysql-replica:
+    ignorePrincipals:
+      - root@localhost
+      - root@%
+      - mysql.sys@localhost
+      - mysql.session@localhost
+      - mysql.infoschema@localhost
+    principals:
+      "app_rw@%":
+        - scope: "vigil_demo.*"
+          privileges: [SELECT, INSERT, UPDATE, DELETE]
+      "vigil_monitor@%":
+        - scope: "*.*"
+          privileges: [PROCESS, REPLICATION CLIENT, SELECT]
+        - scope: "vigil_meta.*"
+          privileges: [INSERT, UPDATE]
+      "repl@%":
+        - scope: "*.*"
+          privileges: [REPLICATION SLAVE]
+  postgres:
+    ignorePrincipals: [vigil_admin, postgres]
+    principals:
+      app_rw:
+        - scope: "public.customers"
+          privileges: [SELECT, INSERT, UPDATE, DELETE]
+        - scope: "public.orders"
+          privileges: [SELECT, INSERT, UPDATE, DELETE]
+        - scope: "public.pg_stat_statements"
+          privileges: [SELECT, INSERT, UPDATE, DELETE]
+        - scope: "public.pg_stat_statements_info"
+          privileges: [SELECT, INSERT, UPDATE, DELETE]
+      vigil_monitor:
+        - scope: "public.customers"
+          privileges: [SELECT]
+        - scope: "public.orders"
+          privileges: [SELECT]
+        - scope: "public.pg_stat_statements"
+          privileges: [SELECT]
+        - scope: "public.pg_stat_statements_info"
+          privileges: [SELECT]
+        - scope: "vigil_meta.canary"
+          privileges: [SELECT, INSERT]

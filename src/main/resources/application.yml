@@ -1,0 +1,71 @@
+server:
+  port: 7080
+
+spring:
+  application:
+    name: vigil
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: jdbc:h2:file:./data/vigil-meta;DB_CLOSE_ON_EXIT=FALSE
+    username: sa
+    password: ""
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,prometheus,info
+  metrics:
+    tags:
+      application: vigil
+
+vigil:
+  poll-interval: 15s
+  collect-timeout: 10s
+  heartbeat-interval: 1s
+  drill:
+    cron: "0 0 */6 * * *"
+    work-dir: ./data/drills
+    row-count-tolerance: 0.02
+    canary-table: vigil_meta.canary
+  policy:
+    file: ./policy/grants-policy.yml
+  targets:
+    - id: mysql-primary
+      engine: MYSQL
+      role: PRIMARY
+      url: jdbc:mysql://localhost:7306/vigil_demo
+      username: vigil_monitor
+      password: ${VIGIL_MYSQL_PW:monpw}
+      dump-container: vigil-mysql-primary
+      schemas: [vigil_demo, vigil_meta]
+      stable-tables: [vigil_demo.customers]
+    - id: mysql-replica
+      engine: MYSQL
+      role: REPLICA
+      replica-of: mysql-primary
+      url: jdbc:mysql://localhost:7307/vigil_demo
+      username: vigil_monitor
+      password: ${VIGIL_MYSQL_PW:monpw}
+    - id: postgres
+      engine: POSTGRES
+      role: STANDALONE
+      url: jdbc:postgresql://localhost:7432/vigil_demo
+      database: vigil_demo
+      username: vigil_monitor
+      password: ${VIGIL_PG_PW:monpw}
+      dump-container: vigil-postgres
+      schemas: [public, vigil_meta]
+      stable-tables: [public.customers]
+    - id: mongo
+      engine: MONGODB
+      role: STANDALONE
+      url: mongodb://vigil_monitor:${VIGIL_MONGO_PW:monpw}@localhost:7017/admin
+    - id: oracle
+      engine: ORACLE
+      role: STANDALONE
+      url: jdbc:oracle:thin:@//localhost:7521/FREEPDB1
+      username: system
+      password: ${VIGIL_ORACLE_PW:oraclepw}
